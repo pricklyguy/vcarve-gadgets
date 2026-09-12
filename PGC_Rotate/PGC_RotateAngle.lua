@@ -1,9 +1,115 @@
 -- VECTRIC LUA SCRIPT
 -- Name = Rotate Each Object By Angle
--- Version = 1.0
+-- Version = 1.1
 -- Help = Rotates every selected object by a user-specified angle around its own center.
+--        Run "Undo Last PGC Change" (PGC_Undo_Last) to reverse this if VCarve's own
+--        Ctrl+Z doesn't offer the option.
 
 require("strict")
+
+----------------------------------------------------------------
+-- PGC UNDO LOG (shared with PGC_Undo_Last.lua - keep in sync)
+--
+-- File-based undo log used by PGC_* gadgets that modify the
+-- drawing, so "Undo Last PGC Change" can reverse the most recent
+-- one even in a completely separate gadget run (VCarve's own
+-- Ctrl+Z does not see changes gadgets make).
+--
+-- Lives one folder up from every gadget (the shared Gadgets
+-- folder) so any PGC_* gadget can find it.
+----------------------------------------------------------------
+
+PGC_UNDO_LOG_MAX_ENTRIES = 10
+
+function PGC_GetUndoLogPath(script_path)
+    return script_path .. "\\..\\PGC_Undo_Log.txt"
+end
+
+function PGC_ReadUndoEntries(log_path)
+
+    local entries = {}
+    local file = io.open(log_path, "r")
+
+    if file == nil then
+        return entries
+    end
+
+    local current = nil
+
+    for line in file:lines() do
+
+        if line == "[ENTRY]" then
+            current = {}
+        elseif line == "[/ENTRY]" then
+            if current ~= nil then
+                table.insert(entries, current)
+                current = nil
+            end
+        elseif current ~= nil then
+            table.insert(current, line)
+        end
+
+    end
+
+    file:close()
+
+    return entries
+
+end
+
+function PGC_WriteUndoEntries(log_path, entries)
+
+    local file = io.open(log_path, "w")
+
+    if file == nil then
+        return false
+    end
+
+    for _, entry in ipairs(entries) do
+
+        file:write("[ENTRY]\n")
+
+        for _, line in ipairs(entry) do
+            file:write(line .. "\n")
+        end
+
+        file:write("[/ENTRY]\n")
+
+    end
+
+    file:close()
+
+    return true
+
+end
+
+function PGC_AppendUndoEntry(script_path, gadget_name, ops)
+
+    if ops == nil or #ops == 0 then
+        return
+    end
+
+    local log_path = PGC_GetUndoLogPath(script_path)
+    local entries = PGC_ReadUndoEntries(log_path)
+
+    local entry = {}
+    table.insert(entry, "gadget=" .. gadget_name)
+    table.insert(entry, "time=" .. os.date("%Y-%m-%dT%H:%M:%S"))
+
+    for _, op in ipairs(ops) do
+        table.insert(entry, op)
+    end
+
+    table.insert(entries, entry)
+
+    while #entries > PGC_UNDO_LOG_MAX_ENTRIES do
+        table.remove(entries, 1)
+    end
+
+    PGC_WriteUndoEntries(log_path, entries)
+
+end
+
 
 g_rotate_angle = 90.0
 
@@ -81,6 +187,8 @@ function main(script_path)
     -- Step 3: Rotate each object around its own bounding-box center.
     ----------------------------------------------------------------
 
+    local undo_ops = {}
+
     for _, object in ipairs(objects_to_rotate) do
 
         -- Get the object's bounding box
@@ -96,7 +204,24 @@ function main(script_path)
         -- Apply transformation
         object:Transform(rot_matrix)
 
+        -- Record how to undo this rotation (same center, opposite
+        -- angle - rotating about its own center doesn't move the
+        -- center, so it's still valid after the transform).
+        table.insert(
+            undo_ops,
+            string.format(
+                "op=rotate raw_id=%s raw_layer_id=%s cx=%.8f cy=%.8f angle=%.8f",
+                tostring(object.RawId),
+                tostring(object.RawLayerId),
+                center.X,
+                center.Y,
+                g_rotate_angle
+            )
+        )
+
     end
+
+    PGC_AppendUndoEntry(script_path, "PGC_Rotate", undo_ops)
 
     ----------------------------------------------------------------
     -- Step 4: Refresh the 2D view

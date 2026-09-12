@@ -1,10 +1,116 @@
 -- VECTRIC LUA SCRIPT
 -- Name = Replace Circles With Group
--- Version = 1.1
+-- Version = 1.2
 -- Help = Replaces selected circles with copies of the last-selected
---        grouped object, centered on the original circles.
+--        grouped object, centered on the original circles. Run "Undo
+--        Last PGC Change" (PGC_Undo_Last) to reverse this if VCarve's
+--        own Ctrl+Z doesn't offer the option.
 
 require("strict")
+
+
+----------------------------------------------------------------
+-- PGC UNDO LOG (shared with PGC_Undo_Last.lua - keep in sync)
+--
+-- File-based undo log used by PGC_* gadgets that modify the
+-- drawing, so "Undo Last PGC Change" can reverse the most recent
+-- one even in a completely separate gadget run (VCarve's own
+-- Ctrl+Z does not see changes gadgets make).
+--
+-- Lives one folder up from every gadget (the shared Gadgets
+-- folder) so any PGC_* gadget can find it.
+----------------------------------------------------------------
+
+PGC_UNDO_LOG_MAX_ENTRIES = 10
+
+function PGC_GetUndoLogPath(script_path)
+    return script_path .. "\\..\\PGC_Undo_Log.txt"
+end
+
+function PGC_ReadUndoEntries(log_path)
+
+    local entries = {}
+    local file = io.open(log_path, "r")
+
+    if file == nil then
+        return entries
+    end
+
+    local current = nil
+
+    for line in file:lines() do
+
+        if line == "[ENTRY]" then
+            current = {}
+        elseif line == "[/ENTRY]" then
+            if current ~= nil then
+                table.insert(entries, current)
+                current = nil
+            end
+        elseif current ~= nil then
+            table.insert(current, line)
+        end
+
+    end
+
+    file:close()
+
+    return entries
+
+end
+
+function PGC_WriteUndoEntries(log_path, entries)
+
+    local file = io.open(log_path, "w")
+
+    if file == nil then
+        return false
+    end
+
+    for _, entry in ipairs(entries) do
+
+        file:write("[ENTRY]\n")
+
+        for _, line in ipairs(entry) do
+            file:write(line .. "\n")
+        end
+
+        file:write("[/ENTRY]\n")
+
+    end
+
+    file:close()
+
+    return true
+
+end
+
+function PGC_AppendUndoEntry(script_path, gadget_name, ops)
+
+    if ops == nil or #ops == 0 then
+        return
+    end
+
+    local log_path = PGC_GetUndoLogPath(script_path)
+    local entries = PGC_ReadUndoEntries(log_path)
+
+    local entry = {}
+    table.insert(entry, "gadget=" .. gadget_name)
+    table.insert(entry, "time=" .. os.date("%Y-%m-%dT%H:%M:%S"))
+
+    for _, op in ipairs(ops) do
+        table.insert(entry, op)
+    end
+
+    table.insert(entries, entry)
+
+    while #entries > PGC_UNDO_LOG_MAX_ENTRIES do
+        table.remove(entries, 1)
+    end
+
+    PGC_WriteUndoEntries(log_path, entries)
+
+end
 
 
 ----------------------------------------------------------------
@@ -18,30 +124,54 @@ require("strict")
 -- and remembered in the registry between runs.
 g_keep_template = true
 
+-- true  = before removing a replaced circle (or the template, if
+--         g_keep_template is false), leave a copy of it on a
+--         "PGC Undo Backup" layer instead of destroying it for
+--         good. "Undo Last PGC Change" only needs to delete the
+--         new replacement copies to undo a run - it never has to
+--         touch these backups - so they're just there as a manual
+--         safety net. Clear out that layer yourself once you're
+--         happy with the result.
+g_backup_replaced = true
+
 
 ----------------------------------------------------------------
--- Ask the user whether to keep the original template object.
+-- Ask the user for the options for this run.
 ----------------------------------------------------------------
 
 function GetUserChoices(script_path)
 
     local registry = Registry("PGC_ReplaceCircles")
     g_keep_template = registry:GetBool("KeepTemplate", g_keep_template)
+    g_backup_replaced = registry:GetBool("BackupReplaced", g_backup_replaced)
 
     local html_path = "file:" .. script_path .. "\\PGC_Replace_Circles.htm"
-    local dialog = HTML_Dialog(false, html_path, 420, 220, "Replace Circles With Group")
+    local dialog = HTML_Dialog(false, html_path, 420, 280, "Replace Circles With Group")
 
     dialog:AddCheckBox("KeepTemplate", g_keep_template)
+    dialog:AddCheckBox("BackupReplaced", g_backup_replaced)
 
     if not dialog:ShowDialog() then
         return false
     end
 
     g_keep_template = dialog:GetCheckBox("KeepTemplate")
+    g_backup_replaced = dialog:GetCheckBox("BackupReplaced")
 
     registry:SetBool("KeepTemplate", g_keep_template)
+    registry:SetBool("BackupReplaced", g_backup_replaced)
 
     return true
+end
+
+
+----------------------------------------------------------------
+-- Get (creating if needed) the layer that backup copies of
+-- replaced circles/templates are parked on.
+----------------------------------------------------------------
+
+function GetBackupLayer(job)
+    return job.LayerManager:GetLayerWithName("PGC Undo Backup")
 end
 
 
@@ -282,6 +412,7 @@ function main(script_path)
     ----------------------------------------------------------------
 
     local replacement_count = 0
+    local undo_ops = {}
 
     for _, target in ipairs(targets) do
 
@@ -339,11 +470,51 @@ function main(script_path)
 
 
                 ----------------------------------------------------
+                -- Leave a backup copy of the original circle
+                -- before removing it, unless the user turned that
+                -- off.
+                ----------------------------------------------------
+
+                if g_backup_replaced then
+
+                    local backup = target:Clone()
+
+                    if backup ~= nil then
+                        GetBackupLayer(job):AddObject(backup, true)
+                    end
+
+                end
+
+
+                ----------------------------------------------------
                 -- Remove the original circle from the layer.
                 ----------------------------------------------------
 
                 if layer ~= nil then
                     layer:RemoveObject(target)
+                end
+
+
+                ----------------------------------------------------
+                -- Record how to undo this replacement: "Undo Last
+                -- PGC Change" just needs to delete the new
+                -- replacement copy. (The original is either still
+                -- there as a backup, or was permanently removed by
+                -- choice - either way there's nothing else to
+                -- reverse.)
+                ----------------------------------------------------
+
+                if layer ~= nil then
+
+                    table.insert(
+                        undo_ops,
+                        string.format(
+                            "op=delete_new raw_id=%s raw_layer_id=%s",
+                            tostring(replacement.RawId),
+                            tostring(target.RawLayerId)
+                        )
+                    )
+
                 end
 
 
@@ -360,6 +531,16 @@ function main(script_path)
 
     if not g_keep_template then
 
+        if g_backup_replaced then
+
+            local template_backup = template:Clone()
+
+            if template_backup ~= nil then
+                GetBackupLayer(job):AddObject(template_backup, true)
+            end
+
+        end
+
         local template_layer =
             job.LayerManager:GetLayerWithId(template.RawLayerId)
 
@@ -373,6 +554,8 @@ function main(script_path)
         selection:Add(template, true, false)
 
     end
+
+    PGC_AppendUndoEntry(script_path, "PGC_Replace_Circles", undo_ops)
 
 
     ----------------------------------------------------------------

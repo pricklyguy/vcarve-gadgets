@@ -9,3 +9,6 @@ Thumbs.db
 # VCarve backup/temp files, if any get copied in by accident
 *.crv.bak
 *~
+
+# Runtime state written by the gadgets themselves, not source
+PGC_Undo_Log.txt

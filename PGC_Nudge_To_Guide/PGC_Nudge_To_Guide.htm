@@ -3,7 +3,7 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
-<title>Replace Circles With Group</title>
+<title>Nudge To Guide</title>
 <style type="text/css">
 html {
 overflow: auto;
@@ -34,37 +34,30 @@ body,td,th {
 <body>
 <table width="100%" border="0">
    <tr>
-      <td class="TitleText"><strong>Replace Circles With Group</strong></td>
+      <td class="TitleText"><strong>Nudge To Guide</strong></td>
    </tr>
    <tr>
       <td><hr size="1" width="100%" /></td>
    </tr>
    <tr>
       <td>
-         <p>Replaces the selected circles with copies of the last-selected
-         grouped object, centered on each original circle.</p>
+         <p>Select the circles/notches you want to align, then Shift-select
+         the guide line, arc, or polyline LAST, then run this gadget.</p>
+         <p>Each selected object is moved (not rotated) so its center lands
+         on the closest point of the guide.</p>
       </td>
    </tr>
 </table>
 <table width="100%" border="0">
    <tr>
       <td colspan="2"><label>
-         <input type="checkbox" name="KeepTemplate" id="KeepTemplate">
-         <strong>Keep the original template object after replacement</strong></label>
+         <input type="checkbox" name="DistributeEvenly" id="DistributeEvenly">
+         <strong>Evenly distribute the objects along the guide</strong></label>
       </td>
    </tr>
    <tr>
-      <td colspan="2"><br><label>
-         <input type="checkbox" name="BackupReplaced" id="BackupReplaced">
-         <strong>Back up replaced circles (for Undo)</strong></label>
-      </td>
-   </tr>
-   <tr>
-      <td colspan="2">Leaves a copy of each replaced circle on a
-      "PGC Undo Backup" layer instead of deleting it outright, so
-      "Undo Last PGC Change" - or you, by hand - can still get it
-      back. Clear that layer yourself once you're happy with the
-      result.</td>
+      <td colspan="2">Spaces the objects evenly between the first and last
+      object's position along the guide, keeping their existing order.</td>
    </tr>
 </table>
 <table width="100%" border="0" cellpadding="0" cellspacing="0">

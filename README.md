@@ -16,8 +16,27 @@ deleted, so there's always a record of what changed and why.
 | Gadget | What it does |
 |---|---|
 | [`PGC_Rotate`](PGC_Rotate/) | `PGC_RotateAngle.lua` — Rotates every selected object about its own center by an angle you enter in a dialog (defaults to the last angle used). Replaces the old fixed 90°/180° gadgets. |
-| [`PGC_Replace_Circles`](PGC_Replace_Circles/) | `PGC_Replace_Circles.lua` — Replaces selected circles with copies of a grouped template object, centered on each original circle. A dialog lets you choose whether to keep the original template after replacement. |
-| [`PGC_Count_Selected_Objects`](PGC_Count_Selected_Objects/) | `PGC_Count_Selected_Objects.lua` — Counts selected vectors matching the last-selected object, rotation/translation/direction independent, and flags duplicates at the same location. A dialog lets you adjust the contour sample resolution. See its `archive/` for version history — v1–v3 only matched same-orientation copies, v4 was rotation/direction independent but had a crashing bug, v4.1 fixed the crash, v4.2 added the options dialog. |
+| [`PGC_Replace_Circles`](PGC_Replace_Circles/) | `PGC_Replace_Circles.lua` — Replaces selected circles with copies of a grouped template object, centered on each original circle. A dialog lets you choose whether to keep the original template after replacement, and whether to back up replaced circles for undo (see below). |
+| [`PGC_Count_Selected_Objects`](PGC_Count_Selected_Objects/) | `PGC_Count_Selected_Objects.lua` — Counts selected vectors matching the last-selected object, rotation/translation/direction independent, and flags duplicates at the same location. A dialog lets you adjust the contour sample resolution. Doesn't modify the drawing, so it has no undo concerns. See its `archive/` for version history — v1–v3 only matched same-orientation copies, v4 was rotation/direction independent but had a crashing bug, v4.1 fixed the crash, v4.2 added the options dialog. |
+| [`PGC_Nudge_To_Guide`](PGC_Nudge_To_Guide/) | `PGC_Nudge_To_Guide.lua` — For cleaning up hand-drawn layouts (e.g. LED holes along a spider leg): select the circles/notches to align, then Shift-select a guide line/arc/polyline LAST, and it nudges each one onto the closest point of the guide. A dialog option evenly redistributes them along the guide afterward, between the first and last object's position. |
+| [`PGC_Undo_Last`](PGC_Undo_Last/) | `PGC_Undo_Last.lua` — Reverses the most recent change made by any of the gadgets above, since VCarve's own Ctrl+Z does not see changes gadgets make. See "Undo support" below. |
+
+## Undo support
+
+VCarve's built-in Undo does not see changes made by gadgets, so a bad result
+used to mean closing the file without saving and starting over. `PGC_Rotate`,
+`PGC_Nudge_To_Guide`, and `PGC_Replace_Circles` now write a small log
+(`PGC_Undo_Log.txt`, kept alongside the gadget folders — not committed to this
+repo) describing how to reverse what they just did. Run `PGC_Undo_Last`
+afterward, same as you would Ctrl+Z, and it reverses the most recent entry;
+run it again to step back through up to the last 10 PGC changes.
+
+`PGC_Replace_Circles` also has its own "Back up replaced circles" option
+(on by default): instead of deleting a replaced circle outright, it leaves a
+copy on a `PGC Undo Backup` layer. `PGC_Undo_Last` doesn't need to touch
+those — it only has to delete the newly created replacement copies to undo a
+run — so the backup layer is just an extra manual safety net. Clear it out
+yourself once you're happy with a result; it isn't cleaned up automatically.
 
 ## Installing a gadget
 
