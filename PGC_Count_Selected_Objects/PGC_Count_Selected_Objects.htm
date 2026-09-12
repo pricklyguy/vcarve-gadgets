@@ -1,0 +1,78 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>Count Selected Object</title>
+<style type="text/css">
+html {
+overflow: auto;
+}
+</style>
+<style type="text/css">
+<!--
+body {
+	background-color: #F0F0F0;
+}
+
+body,td,th {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+}
+.FormButton {
+	font-weight: bold;
+	width: 100%;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+}
+.TitleText {
+	font-size: 14px;
+}
+-->
+</style></head>
+
+<body>
+<table width="100%" border="0">
+   <tr>
+      <td class="TitleText"><strong>Count Selected Object</strong></td>
+   </tr>
+   <tr>
+      <td><hr size="1" width="100%" /></td>
+   </tr>
+   <tr>
+      <td>
+         <p>Counts selected vectors matching the shape of the LAST-selected
+         object. Nothing in the drawing is modified.</p>
+      </td>
+   </tr>
+</table>
+<table width="100%" border="0">
+   <tr>
+      <td width="60%">Sample Points (per contour)</td>
+      <td width="40%"><input name="SampleCount" type="text" id="SampleCount" size="8"></td>
+   </tr>
+   <tr>
+      <td colspan="2">Higher values give a more precise shape match for
+      complex geometry, but run slower. 32 is fine for most jobs.</td>
+   </tr>
+</table>
+<table width="100%" border="0" cellpadding="0" cellspacing="0">
+   <tr>
+      <td><br><hr size="1" width="100%" /></td>
+   </tr>
+   <tr>
+      <td>
+         <table width="100%" border="0">
+            <tr>
+               <td width="20%">&nbsp;</td>
+               <td width="20%"><input name="ButtonOK" type="button" class="FormButton" id="ButtonOK" value="OK"></td>
+               <td width="20%">&nbsp;</td>
+               <td width="20%"><input name="ButtonCancel" type="button" class="FormButton" id="ButtonCancel" value="Cancel"></td>
+               <td width="20%">&nbsp;</td>
+            </tr>
+         </table>
+      </td>
+   </tr>
+</table>
+</body>
+</html>
