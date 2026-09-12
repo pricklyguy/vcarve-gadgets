@@ -511,20 +511,29 @@ function main(script_path)
 
                 if layer ~= nil then
 
-                    local replacement_center = FindTemplateCircleCenter(replacement)
+                    -- Wrapped in pcall so any surprise in the undo
+                    -- bookkeeping can't stop the rest of the
+                    -- replacements from being processed.
+                    pcall(
+                        function()
 
-                    if replacement_center ~= nil then
+                            local replacement_center = FindTemplateCircleCenter(replacement)
 
-                        table.insert(
-                            undo_ops,
-                            string.format(
-                                "op=delete_new cx=%.8f cy=%.8f",
-                                replacement_center.X,
-                                replacement_center.Y
-                            )
-                        )
+                            if replacement_center ~= nil then
 
-                    end
+                                table.insert(
+                                    undo_ops,
+                                    string.format(
+                                        "op=delete_new cx=%.8f cy=%.8f",
+                                        replacement_center.X,
+                                        replacement_center.Y
+                                    )
+                                )
+
+                            end
+
+                        end
+                    )
 
                 end
 
@@ -566,7 +575,7 @@ function main(script_path)
 
     end
 
-    PGC_AppendUndoEntry(script_path, "PGC_Replace_Circles", undo_ops)
+    pcall(PGC_AppendUndoEntry, script_path, "PGC_Replace_Circles", undo_ops)
 
 
     ----------------------------------------------------------------

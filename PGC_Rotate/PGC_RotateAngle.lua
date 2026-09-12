@@ -211,19 +211,27 @@ function main(script_path)
         -- We identify the object by its center point rather than
         -- its internal ID - Vectric's RawId/RawLayerId values
         -- can't be converted with tostring() in this Lua build.
-        table.insert(
-            undo_ops,
-            string.format(
-                "op=rotate cx=%.8f cy=%.8f angle=%.8f",
-                center.X,
-                center.Y,
-                g_rotate_angle
-            )
+        --
+        -- Wrapped in pcall so that if the undo bookkeeping ever
+        -- hits something unexpected, it just skips logging that
+        -- object instead of aborting the rest of the rotation.
+        pcall(
+            function()
+                table.insert(
+                    undo_ops,
+                    string.format(
+                        "op=rotate cx=%.8f cy=%.8f angle=%.8f",
+                        center.X,
+                        center.Y,
+                        g_rotate_angle
+                    )
+                )
+            end
         )
 
     end
 
-    PGC_AppendUndoEntry(script_path, "PGC_Rotate", undo_ops)
+    pcall(PGC_AppendUndoEntry, script_path, "PGC_Rotate", undo_ops)
 
     ----------------------------------------------------------------
     -- Step 4: Refresh the 2D view

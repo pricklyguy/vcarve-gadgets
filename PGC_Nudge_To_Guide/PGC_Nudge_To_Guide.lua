@@ -692,22 +692,28 @@ function main(script_path)
 
         if final_anchor ~= nil then
 
-            table.insert(
-                undo_ops,
-                string.format(
-                    "op=translate ox=%.8f oy=%.8f fx=%.8f fy=%.8f",
-                    entry.anchor.X,
-                    entry.anchor.Y,
-                    final_anchor.X,
-                    final_anchor.Y
-                )
+            -- Wrapped in pcall so any surprise in the undo
+            -- bookkeeping can't undermine work that's already done.
+            pcall(
+                function()
+                    table.insert(
+                        undo_ops,
+                        string.format(
+                            "op=translate ox=%.8f oy=%.8f fx=%.8f fy=%.8f",
+                            entry.anchor.X,
+                            entry.anchor.Y,
+                            final_anchor.X,
+                            final_anchor.Y
+                        )
+                    )
+                end
             )
 
         end
 
     end
 
-    PGC_AppendUndoEntry(script_path, "PGC_Nudge_To_Guide", undo_ops)
+    pcall(PGC_AppendUndoEntry, script_path, "PGC_Nudge_To_Guide", undo_ops)
 
 
     ----------------------------------------------------------------
