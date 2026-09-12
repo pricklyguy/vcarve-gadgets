@@ -674,8 +674,14 @@ function main(script_path)
     -- Every move here is a pure translation (no rotation), so the
     -- net effect on each object - however many steps it went
     -- through above - is just the vector from where it started to
-    -- where it ended up. Comparing the anchor now to the one we
-    -- recorded before Step 1 gives us that net vector directly.
+    -- where it ended up. We log the ORIGINAL anchor (before Step 1)
+    -- and the FINAL anchor (now) so "Undo Last PGC Change" can find
+    -- the object by its final position and move it back to the
+    -- original one.
+    --
+    -- We identify the object by position rather than its internal
+    -- ID - Vectric's RawId/RawLayerId values can't be converted
+    -- with tostring() in this Lua build.
     ----------------------------------------------------------------
 
     local undo_ops = {}
@@ -686,17 +692,14 @@ function main(script_path)
 
         if final_anchor ~= nil then
 
-            local dx = final_anchor.X - entry.anchor.X
-            local dy = final_anchor.Y - entry.anchor.Y
-
             table.insert(
                 undo_ops,
                 string.format(
-                    "op=translate raw_id=%s raw_layer_id=%s dx=%.8f dy=%.8f",
-                    tostring(entry.object.RawId),
-                    tostring(entry.object.RawLayerId),
-                    dx,
-                    dy
+                    "op=translate ox=%.8f oy=%.8f fx=%.8f fy=%.8f",
+                    entry.anchor.X,
+                    entry.anchor.Y,
+                    final_anchor.X,
+                    final_anchor.Y
                 )
             )
 

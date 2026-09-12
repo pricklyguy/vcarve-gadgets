@@ -1,6 +1,6 @@
 -- VECTRIC LUA SCRIPT
 -- Name = Undo Last PGC Change
--- Version = 1.0
+-- Version = 1.1
 -- Help = Reverses the most recent change made by a PGC_* gadget
 --        (PGC_Rotate, PGC_Nudge_To_Guide, PGC_Replace_Circles).
 --        VCarve's own Ctrl+Z does not see changes gadgets make -
@@ -85,8 +85,6 @@ end
 
 ----------------------------------------------------------------
 -- Parse one "key=value key=value ..." log line into a table.
--- Works for any of our op lines since every field is a single
--- whitespace-free token.
 ----------------------------------------------------------------
 
 function PGC_ParseFields(line)
@@ -103,43 +101,96 @@ end
 
 
 ----------------------------------------------------------------
--- Find an object by its RawId, starting with the layer we
--- recorded (fast path), falling back to a scan of every layer in
--- the job in case the layer was since renamed/recreated.
+-- Objects are identified by POSITION, not by Vectric's internal
+-- RawId/RawLayerId - those can't be converted with tostring() in
+-- this Lua build, so they can't be written to a text log at all.
+-- Matching by position is a little less exact, but every op below
+-- records the exact point the object should be sitting at right
+-- now, so a tight tolerance is enough to find the right one.
 ----------------------------------------------------------------
 
-function PGC_FindObjectInLayer(job, raw_layer_id_str, raw_id_str)
+function PGC_PointsMatch(x1, y1, x2, y2, tolerance)
 
-    local raw_layer_id = tonumber(raw_layer_id_str)
+    local dx = x1 - x2
+    local dy = y1 - y2
 
-    if raw_layer_id == nil then
-        return nil
-    end
-
-    local layer = job.LayerManager:GetLayerWithId(raw_layer_id)
-
-    if layer == nil then
-        return nil
-    end
-
-    local pos = layer:GetHeadPosition()
-
-    while pos ~= nil do
-
-        local object
-        object, pos = layer:GetNext(pos)
-
-        if object ~= nil and tostring(object.RawId) == raw_id_str then
-            return object, layer
-        end
-
-    end
-
-    return nil
+    return ((dx * dx) + (dy * dy)) <= (tolerance * tolerance)
 
 end
 
-function PGC_FindObjectAnywhere(job, raw_id_str)
+
+----------------------------------------------------------------
+-- Find the point on an object to match against - same rule
+-- PGC_Nudge_To_Guide and PGC_Replace_Circles use: for a grouped
+-- notch, the center of the largest closed contour inside it
+-- (the actual circle); otherwise the bounding-box center.
+----------------------------------------------------------------
+
+function PGC_FindObjectPoint(object)
+
+    if object.ClassName == "vcCadObjectGroup" then
+
+        local group = CastCadObjectToCadObjectGroup(object)
+
+        if group == nil or group.IsEmpty then
+            return nil
+        end
+
+        local best_contour = nil
+        local best_area = 0.0
+
+        local pos = group:GetHeadPosition()
+
+        while pos ~= nil do
+
+            local child
+
+            child, pos = group:GetNext(pos)
+
+            if child ~= nil then
+
+                local contour = child:GetContour()
+
+                if contour ~= nil and contour.IsClosed then
+
+                    local area = contour.Area
+
+                    if area > best_area then
+                        best_area = area
+                        best_contour = contour
+                    end
+
+                end
+            end
+        end
+
+        if best_contour == nil then
+            return nil
+        end
+
+        return best_contour.BoundingBox2D.Center
+
+    else
+
+        local bbox = object:GetBoundingBox()
+
+        if bbox == nil then
+            return nil
+        end
+
+        return bbox.Center
+
+    end
+
+end
+
+
+----------------------------------------------------------------
+-- Walk every object in every layer, returning the first one for
+-- which test_fn(object) returns true, plus the layer it's on.
+----------------------------------------------------------------
+
+function PGC_FindObjectWhere(job, test_fn)
 
     local layer_manager = job.LayerManager
     local layer_pos = layer_manager:GetHeadPosition()
@@ -158,7 +209,7 @@ function PGC_FindObjectAnywhere(job, raw_id_str)
                 local object
                 object, pos = layer:GetNext(pos)
 
-                if object ~= nil and tostring(object.RawId) == raw_id_str then
+                if object ~= nil and test_fn(object) then
                     return object, layer
                 end
 
@@ -168,19 +219,7 @@ function PGC_FindObjectAnywhere(job, raw_id_str)
 
     end
 
-    return nil
-
-end
-
-function PGC_FindObject(job, raw_layer_id_str, raw_id_str)
-
-    local object, layer = PGC_FindObjectInLayer(job, raw_layer_id_str, raw_id_str)
-
-    if object ~= nil then
-        return object, layer
-    end
-
-    return PGC_FindObjectAnywhere(job, raw_id_str)
+    return nil, nil
 
 end
 
@@ -212,6 +251,15 @@ function main(script_path)
 
     local entry = table.remove(entries)
 
+    -- Match tolerance: a small multiple of the job's own geometry
+    -- tolerance, with a sane floor so it still works if that comes
+    -- back as zero.
+    local tolerance = GetDefaultContourTolerance() * 10.0
+
+    if tolerance < 0.0005 then
+        tolerance = 0.0005
+    end
+
     local gadget_name = "a PGC gadget"
     local rotated_count = 0
     local translated_count = 0
@@ -235,33 +283,77 @@ function main(script_path)
 
             if op.op == "rotate" then
 
-                local object = PGC_FindObject(job, op.raw_layer_id, op.raw_id)
+                local cx = tonumber(op.cx)
+                local cy = tonumber(op.cy)
+                local angle = tonumber(op.angle)
+
+                local object = PGC_FindObjectWhere(
+                    job,
+                    function(candidate)
+                        local bbox = candidate:GetBoundingBox()
+                        if bbox == nil then
+                            return false
+                        end
+                        local center = bbox.Center
+                        return PGC_PointsMatch(center.X, center.Y, cx, cy, tolerance)
+                    end
+                )
 
                 if object == nil then
                     missing_count = missing_count + 1
                 else
-                    local center = Point2D(tonumber(op.cx), tonumber(op.cy))
-                    local undo_matrix = RotationMatrix2D(center, -tonumber(op.angle))
+                    local center = Point2D(cx, cy)
+                    local undo_matrix = RotationMatrix2D(center, -angle)
                     object:Transform(undo_matrix)
                     rotated_count = rotated_count + 1
                 end
 
             elseif op.op == "translate" then
 
-                local object = PGC_FindObject(job, op.raw_layer_id, op.raw_id)
+                local ox = tonumber(op.ox)
+                local oy = tonumber(op.oy)
+                local fx = tonumber(op.fx)
+                local fy = tonumber(op.fy)
+
+                local object = PGC_FindObjectWhere(
+                    job,
+                    function(candidate)
+                        local point = PGC_FindObjectPoint(candidate)
+                        if point == nil then
+                            return false
+                        end
+                        return PGC_PointsMatch(point.X, point.Y, fx, fy, tolerance)
+                    end
+                )
 
                 if object == nil then
                     missing_count = missing_count + 1
                 else
-                    local reverse_vector = Point2D(-tonumber(op.dx), -tonumber(op.dy))
-                    local undo_matrix = TranslationMatrix2D(reverse_vector)
+                    local current_point = PGC_FindObjectPoint(object)
+                    local move_vector = Point2D(ox - current_point.X, oy - current_point.Y)
+                    local undo_matrix = TranslationMatrix2D(move_vector)
                     object:Transform(undo_matrix)
                     translated_count = translated_count + 1
                 end
 
             elseif op.op == "delete_new" then
 
-                local object, layer = PGC_FindObject(job, op.raw_layer_id, op.raw_id)
+                local cx = tonumber(op.cx)
+                local cy = tonumber(op.cy)
+
+                local object, layer = PGC_FindObjectWhere(
+                    job,
+                    function(candidate)
+                        if candidate.ClassName ~= "vcCadObjectGroup" then
+                            return false
+                        end
+                        local point = PGC_FindObjectPoint(candidate)
+                        if point == nil then
+                            return false
+                        end
+                        return PGC_PointsMatch(point.X, point.Y, cx, cy, tolerance)
+                    end
+                )
 
                 if object == nil or layer == nil then
                     missing_count = missing_count + 1
@@ -299,7 +391,7 @@ function main(script_path)
     if missing_count > 0 then
         message = message .. "\n\n" .. tostring(missing_count) ..
             " object(s) from that change could not be found " ..
-            "(edited or deleted since) and were skipped."
+            "(moved, edited, or deleted since) and were skipped."
     end
 
     if #entries > 0 then

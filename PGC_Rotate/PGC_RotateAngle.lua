@@ -207,12 +207,14 @@ function main(script_path)
         -- Record how to undo this rotation (same center, opposite
         -- angle - rotating about its own center doesn't move the
         -- center, so it's still valid after the transform).
+        --
+        -- We identify the object by its center point rather than
+        -- its internal ID - Vectric's RawId/RawLayerId values
+        -- can't be converted with tostring() in this Lua build.
         table.insert(
             undo_ops,
             string.format(
-                "op=rotate raw_id=%s raw_layer_id=%s cx=%.8f cy=%.8f angle=%.8f",
-                tostring(object.RawId),
-                tostring(object.RawLayerId),
+                "op=rotate cx=%.8f cy=%.8f angle=%.8f",
                 center.X,
                 center.Y,
                 g_rotate_angle

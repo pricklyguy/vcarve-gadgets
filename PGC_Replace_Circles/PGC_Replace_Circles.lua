@@ -502,18 +502,29 @@ function main(script_path)
                 -- there as a backup, or was permanently removed by
                 -- choice - either way there's nothing else to
                 -- reverse.)
+                --
+                -- We identify the replacement by its circle center
+                -- rather than its internal ID - Vectric's
+                -- RawId/RawLayerId values can't be converted with
+                -- tostring() in this Lua build.
                 ----------------------------------------------------
 
                 if layer ~= nil then
 
-                    table.insert(
-                        undo_ops,
-                        string.format(
-                            "op=delete_new raw_id=%s raw_layer_id=%s",
-                            tostring(replacement.RawId),
-                            tostring(target.RawLayerId)
+                    local replacement_center = FindTemplateCircleCenter(replacement)
+
+                    if replacement_center ~= nil then
+
+                        table.insert(
+                            undo_ops,
+                            string.format(
+                                "op=delete_new cx=%.8f cy=%.8f",
+                                replacement_center.X,
+                                replacement_center.Y
+                            )
                         )
-                    )
+
+                    end
 
                 end
 
