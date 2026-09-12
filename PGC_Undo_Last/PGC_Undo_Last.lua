@@ -373,13 +373,20 @@ function main(script_path)
 
                     -- If a backup of the original circle exists
                     -- (same point, but NOT a group like the
-                    -- replacement is), move it back onto the
-                    -- replacement's layer before removing the
+                    -- replacement is), put a copy of it back onto
+                    -- the replacement's layer before removing the
                     -- replacement, so the circle actually
                     -- reappears instead of staying parked on the
                     -- backup layer. No backup is normal (and not
                     -- an error) when "Back up replaced circles"
                     -- was off for that run.
+                    --
+                    -- We have to Clone() it rather than moving the
+                    -- existing object across layers - Vectric's
+                    -- AddObject refuses an object that already
+                    -- belongs to another layer ("luabind: smart
+                    -- pointer does not allow ownership transfer"),
+                    -- it only accepts a fresh, ownerless object.
                     local backup, backup_layer = PGC_FindObjectWhere(
                         job,
                         function(candidate)
@@ -395,9 +402,15 @@ function main(script_path)
                     )
 
                     if backup ~= nil and backup_layer ~= nil then
-                        target_layer:AddObject(backup, true)
-                        backup_layer:RemoveObject(backup)
-                        restored_count = restored_count + 1
+
+                        local restored_clone = backup:Clone()
+
+                        if restored_clone ~= nil then
+                            target_layer:AddObject(restored_clone, true)
+                            backup_layer:RemoveObject(backup)
+                            restored_count = restored_count + 1
+                        end
+
                     end
 
                     target_layer:RemoveObject(replacement)

@@ -1,9 +1,13 @@
 -- VECTRIC LUA SCRIPT
 -- Name = Count Selected Object
--- Version = 4.2
+-- Version = 4.3
 --
 -- Description:
 -- Counts selected vectors matching the LAST-SELECTED object.
+--
+-- V4.3:
+--   * Enforced a sane range (8-200) on Sample Points and said so in the
+--     dialog, and gave the dialog more vertical room.
 --
 -- V4.2:
 --   * Added an options dialog (PGC_Count_Selected_Objects.htm) so the
@@ -95,7 +99,7 @@ function GetUserChoices(script_path)
     g_sample_count = registry:GetInt("SampleCount", g_sample_count)
 
     local html_path = "file:" .. script_path .. "\\PGC_Count_Selected_Objects.htm"
-    local dialog = HTML_Dialog(false, html_path, 420, 220, "Count Selected Object")
+    local dialog = HTML_Dialog(false, html_path, 440, 320, "Count Selected Object")
 
     dialog:AddIntegerField("SampleCount", g_sample_count)
 
@@ -105,8 +109,8 @@ function GetUserChoices(script_path)
 
     g_sample_count = dialog:GetIntegerField("SampleCount")
 
-    if g_sample_count < 8 then
-        DisplayMessageBox("Sample Points must be at least 8.")
+    if g_sample_count < 8 or g_sample_count > 200 then
+        DisplayMessageBox("Sample Points must be between 8 and 200.")
         return false
     end
 
@@ -1239,7 +1243,7 @@ function main(script_path)
     local message =
 
         "----------------------------------------\n" ..
-        "       PGC COUNT SELECTED OBJECT V4.2\n" ..
+        "       PGC COUNT SELECTED OBJECT V4.3\n" ..
         "----------------------------------------\n\n" ..
 
         "Objects originally selected: " ..
