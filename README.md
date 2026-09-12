@@ -19,9 +19,9 @@ what changed and why.
 ## Installing a gadget
 
 1. Copy the gadget's `.lua` file into your VCarve gadgets folder — typically
-   `Documents\Vectric Files\Gadgets\VCarve Pro V10\` (per-user) or the shared
-   `Gadgets` folder under the VCarve program data location.
-2. Restart VCarve Pro, or use **File → Reload Gadgets** if your version has it.
+   `C:\ProgramData\Vectric\VCarve Pro\V10.5\` (per-user) or the shared
+   `Gadgets` folder under the VCarve program data location. (From VCarve's file menu, Open Application Data Folder)
+2. Restart VCarve Pro to load new Gadgets.
 3. The gadget appears under the Gadgets panel/toolbar.
 
 ## Versioning convention
