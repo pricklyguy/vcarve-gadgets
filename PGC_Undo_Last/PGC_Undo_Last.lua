@@ -264,6 +264,7 @@ function main(script_path)
     local rotated_count = 0
     local translated_count = 0
     local removed_count = 0
+    local restored_count = 0
     local missing_count = 0
 
     -- Apply in reverse order, in case a later op in the run
@@ -330,18 +331,27 @@ function main(script_path)
                     missing_count = missing_count + 1
                 else
                     local current_point = PGC_FindObjectPoint(object)
-                    local move_vector = Point2D(ox - current_point.X, oy - current_point.Y)
+                    local original_point = Point2D(ox, oy)
+
+                    -- TranslationMatrix2D wants a Vector2D, not a
+                    -- Point2D - subtracting two points is how the
+                    -- other PGC gadgets get one.
+                    local move_vector = original_point - current_point
                     local undo_matrix = TranslationMatrix2D(move_vector)
                     object:Transform(undo_matrix)
                     translated_count = translated_count + 1
                 end
 
-            elseif op.op == "delete_new" then
+            elseif op.op == "replace" then
 
                 local cx = tonumber(op.cx)
                 local cy = tonumber(op.cy)
 
-                local object, layer = PGC_FindObjectWhere(
+                -- The replacement is the group sitting at this
+                -- point. Finding it also tells us which layer the
+                -- original target lived on, since the replacement
+                -- was added to that same layer.
+                local replacement, target_layer = PGC_FindObjectWhere(
                     job,
                     function(candidate)
                         if candidate.ClassName ~= "vcCadObjectGroup" then
@@ -355,11 +365,44 @@ function main(script_path)
                     end
                 )
 
-                if object == nil or layer == nil then
+                if replacement == nil or target_layer == nil then
+
                     missing_count = missing_count + 1
+
                 else
-                    layer:RemoveObject(object)
+
+                    -- If a backup of the original circle exists
+                    -- (same point, but NOT a group like the
+                    -- replacement is), move it back onto the
+                    -- replacement's layer before removing the
+                    -- replacement, so the circle actually
+                    -- reappears instead of staying parked on the
+                    -- backup layer. No backup is normal (and not
+                    -- an error) when "Back up replaced circles"
+                    -- was off for that run.
+                    local backup, backup_layer = PGC_FindObjectWhere(
+                        job,
+                        function(candidate)
+                            if candidate.ClassName == "vcCadObjectGroup" then
+                                return false
+                            end
+                            local point = PGC_FindObjectPoint(candidate)
+                            if point == nil then
+                                return false
+                            end
+                            return PGC_PointsMatch(point.X, point.Y, cx, cy, tolerance)
+                        end
+                    )
+
+                    if backup ~= nil and backup_layer ~= nil then
+                        target_layer:AddObject(backup, true)
+                        backup_layer:RemoveObject(backup)
+                        restored_count = restored_count + 1
+                    end
+
+                    target_layer:RemoveObject(replacement)
                     removed_count = removed_count + 1
+
                 end
 
             end
@@ -386,6 +429,10 @@ function main(script_path)
 
     if removed_count > 0 then
         message = message .. "\nRemoved " .. tostring(removed_count) .. " newly-created object(s)"
+    end
+
+    if restored_count > 0 then
+        message = message .. "\nRestored " .. tostring(restored_count) .. " backed-up object(s)"
     end
 
     if missing_count > 0 then

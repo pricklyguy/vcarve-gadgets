@@ -33,10 +33,13 @@ run it again to step back through up to the last 10 PGC changes.
 
 `PGC_Replace_Circles` also has its own "Back up replaced circles" option
 (on by default): instead of deleting a replaced circle outright, it leaves a
-copy on a `PGC Undo Backup` layer. `PGC_Undo_Last` doesn't need to touch
-those — it only has to delete the newly created replacement copies to undo a
-run — so the backup layer is just an extra manual safety net. Clear it out
-yourself once you're happy with a result; it isn't cleaned up automatically.
+copy on a `PGC Undo Backup` layer. When that option was on, `PGC_Undo_Last`
+moves the backup back onto the replacement's original layer and deletes the
+replacement, so the circle actually reappears. With the option off, there's
+nothing to restore — the original geometry is gone for good, so undo just
+removes the replacement (same as if you'd selected and deleted it). Any
+backups left over after you're happy with a result can be cleared out by
+hand; they aren't removed automatically.
 
 ## Installing a gadget
 

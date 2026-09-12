@@ -134,7 +134,7 @@ function GetUserChoices(script_path)
     g_distribute_evenly = registry:GetBool("DistributeEvenly", g_distribute_evenly)
 
     local html_path = "file:" .. script_path .. "\\PGC_Nudge_To_Guide.htm"
-    local dialog = HTML_Dialog(false, html_path, 440, 260, "Nudge To Guide")
+    local dialog = HTML_Dialog(false, html_path, 440, 340, "Nudge To Guide")
 
     dialog:AddCheckBox("DistributeEvenly", g_distribute_evenly)
 

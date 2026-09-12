@@ -146,7 +146,7 @@ function GetUserChoices(script_path)
     g_backup_replaced = registry:GetBool("BackupReplaced", g_backup_replaced)
 
     local html_path = "file:" .. script_path .. "\\PGC_Replace_Circles.htm"
-    local dialog = HTML_Dialog(false, html_path, 420, 280, "Replace Circles With Group")
+    local dialog = HTML_Dialog(false, html_path, 460, 400, "Replace Circles With Group")
 
     dialog:AddCheckBox("KeepTemplate", g_keep_template)
     dialog:AddCheckBox("BackupReplaced", g_backup_replaced)
@@ -497,16 +497,23 @@ function main(script_path)
 
                 ----------------------------------------------------
                 -- Record how to undo this replacement: "Undo Last
-                -- PGC Change" just needs to delete the new
-                -- replacement copy. (The original is either still
-                -- there as a backup, or was permanently removed by
-                -- choice - either way there's nothing else to
-                -- reverse.)
+                -- PGC Change" needs to delete the new replacement
+                -- copy AND, if a backup was made, move that backup
+                -- back onto the layer the replacement was on (the
+                -- target's original layer) so the circle actually
+                -- reappears instead of staying parked on the
+                -- backup layer.
                 --
-                -- We identify the replacement by its circle center
-                -- rather than its internal ID - Vectric's
-                -- RawId/RawLayerId values can't be converted with
-                -- tostring() in this Lua build.
+                -- Both the replacement and its backup sit at the
+                -- same point (the original target's center), so one
+                -- position is enough to find both of them later -
+                -- the replacement is the vcCadObjectGroup there,
+                -- the backup (if any) is the non-group object there.
+                --
+                -- We identify objects by position rather than their
+                -- internal ID - Vectric's RawId/RawLayerId values
+                -- can't be converted with tostring() in this Lua
+                -- build.
                 ----------------------------------------------------
 
                 if layer ~= nil then
@@ -524,7 +531,7 @@ function main(script_path)
                                 table.insert(
                                     undo_ops,
                                     string.format(
-                                        "op=delete_new cx=%.8f cy=%.8f",
+                                        "op=replace cx=%.8f cy=%.8f",
                                         replacement_center.X,
                                         replacement_center.Y
                                     )
@@ -598,6 +605,22 @@ function main(script_path)
         return false
     end
 
+    local finished_message =
+        "Finished.\n\nReplaced " .. tostring(replacement_count) .. " circle(s)."
+
+    if g_keep_template then
+        finished_message = finished_message .. "\nTemplate kept."
+    else
+        finished_message = finished_message .. "\nTemplate removed."
+    end
+
+    if g_backup_replaced then
+        finished_message = finished_message ..
+            "\n\nBackup copies of the replaced circles are on the " ..
+            "\"PGC Undo Backup\" layer."
+    end
+
+    DisplayMessageBox(finished_message)
 
     return true
 

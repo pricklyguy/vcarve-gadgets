@@ -239,5 +239,10 @@ function main(script_path)
 
     job:Refresh2DView()
 
+    DisplayMessageBox(
+        "Finished.\n\nRotated " .. tostring(#objects_to_rotate) ..
+        " object(s) by " .. tostring(g_rotate_angle) .. " degrees."
+    )
+
     return true
 end
