@@ -1,0 +1,11 @@
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor cruft
+*.swp
+.vscode/
+
+# VCarve backup/temp files, if any get copied in by accident
+*.crv.bak
+*~
