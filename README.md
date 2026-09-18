@@ -41,6 +41,12 @@ removes the replacement (same as if you'd selected and deleted it). Any
 backups left over after you're happy with a result can be cleared out by
 hand; they aren't removed automatically.
 
+## Tools (not gadgets)
+
+| Tool | What it does |
+|---|---|
+| [`tools/xmodel_wiring_export`](tools/xmodel_wiring_export/) | `PGC_Wiring_Export.ps1` — standalone PowerShell script (runs outside VCarve). Converts an xLights `.xmodel` export into a DXF: one polyline per LED string in true wiring order (for a spindle-mounted marker to trace), plus one reference circle per node at its exact position (feed these into `PGC_Replace_Circles` for accurate hole placement). See its own README for usage. |
+
 ## Installing a gadget
 
 1. Copy the gadget's whole `PGC_*` folder (the `.lua` file and, if present,
