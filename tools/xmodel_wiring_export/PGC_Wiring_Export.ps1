@@ -37,7 +37,8 @@
   wiring-path segment is routed around when it would otherwise cut across an
   unrelated pixel's hole (ambiguous - looks like the wire terminates there). If not
   given, the script tries to read it from the model's PixelType attribute (e.g.
-  "12mm bullet or square" -> 12mm); falls back to 12mm if that can't be parsed.
+  "12mm bullet or square" -> 12mm); falls back to 15mm if that can't be parsed
+  (e.g. PixelType is just "Bullets" with no size in the text).
 
 .PARAMETER ClearanceMargin
   Extra clearance, in mm, added outside the hole radius when routing around an
@@ -171,8 +172,8 @@ if ($null -eq $HoleDiameter) {
     if ($match.Success) {
         $HoleDiameter = [double]$match.Groups[1].Value
     } else {
-        $HoleDiameter = 12.0
-        Write-Warning "Could not determine hole diameter from PixelType ('$pixelType') - defaulting to 12mm. Pass -HoleDiameter to override."
+        $HoleDiameter = 15.0
+        Write-Warning "Could not determine hole diameter from PixelType ('$pixelType') - defaulting to 15mm. Pass -HoleDiameter to override."
     }
 }
 $keepoutRadius = ($HoleDiameter / 2.0) + $ClearanceMargin

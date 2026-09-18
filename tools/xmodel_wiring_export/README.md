@@ -55,7 +55,7 @@ parameters:
 
 - `-OutputPath` - where to write the DXF (default: same folder/name as the input, with a `.dxf` extension).
 - `-PointRadius` - radius in mm of the `NODE_POINTS` circles (default 1.5mm). Cosmetic only - `PGC_Replace_Circles` only uses each circle's center.
-- `-HoleDiameter` - diameter in mm of the actual drilled pixel hole, used as the keep-out zone for routing wiring-path segments around pixels they don't connect to. If not given, the script tries to read it from the model's `PixelType` attribute (e.g. `"12mm bullet or square"` -> 12mm); falls back to 12mm if that can't be parsed. Pass this explicitly if your model's `PixelType` doesn't include a clean `Nmm` size.
+- `-HoleDiameter` - diameter in mm of the actual drilled pixel hole, used as the keep-out zone for routing wiring-path segments around pixels they don't connect to. If not given, the script tries to read it from the model's `PixelType` attribute (e.g. `"12mm bullet or square"` -> 12mm); falls back to 15mm if that can't be parsed (e.g. `PixelType` is just `"Bullets"` with no size). The fallback was bumped from an earlier 12mm default after real notches/holes turned out to run a bit bigger than that. Pass this explicitly if your model's `PixelType` doesn't include a clean `Nmm` size and your actual holes aren't ~15mm.
 - `-ClearanceMargin` - extra clearance in mm added outside the hole radius when routing around an obstacle (default 1.0mm), so the path doesn't just graze the edge of the hole.
 
 The script prints how many detours it added, e.g.
