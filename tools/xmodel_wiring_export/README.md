@@ -15,7 +15,10 @@ and produces:
 - **`STRING_1`, `STRING_2`, ...** (one layer per physical LED string) - a
   single polyline per string, connecting its nodes in true wiring order.
   Trace this with a marker mounted on the spindle (offset from the cutting
-  tool) to draw a wiring guide directly onto the prop before cutting.
+  tool) to draw a wiring guide directly onto the prop before cutting. Where
+  a straight line between two consecutive nodes would pass through an
+  unrelated pixel's hole - ambiguous, since it then looks like the wire
+  terminates there - the path automatically kinks around it instead.
 - **`NODE_POINTS`** - one small circle at every node's exact position.
   Select these along with your circle+notch template (selected last) and
   run `PGC_Replace_Circles` (see the main gadgets in this repo) to place
@@ -47,11 +50,16 @@ This writes a `.dxf` next to the input file by default. Optional
 parameters:
 
 ```powershell
-.\PGC_Wiring_Export.ps1 -InputPath "Web L.xmodel" -OutputPath "Z:\Halloween\Web_L.dxf" -PointRadius 2.0
+.\PGC_Wiring_Export.ps1 -InputPath "Web L.xmodel" -OutputPath "Z:\Halloween\Web_L.dxf" -PointRadius 2.0 -HoleDiameter 10
 ```
 
 - `-OutputPath` - where to write the DXF (default: same folder/name as the input, with a `.dxf` extension).
 - `-PointRadius` - radius in mm of the `NODE_POINTS` circles (default 1.5mm). Cosmetic only - `PGC_Replace_Circles` only uses each circle's center.
+- `-HoleDiameter` - diameter in mm of the actual drilled pixel hole, used as the keep-out zone for routing wiring-path segments around pixels they don't connect to. If not given, the script tries to read it from the model's `PixelType` attribute (e.g. `"12mm bullet or square"` -> 12mm); falls back to 12mm if that can't be parsed. Pass this explicitly if your model's `PixelType` doesn't include a clean `Nmm` size.
+- `-ClearanceMargin` - extra clearance in mm added outside the hole radius when routing around an obstacle (default 1.0mm), so the path doesn't just graze the edge of the hole.
+
+The script prints how many detours it added, e.g.
+`Hole keep-out: 12mm diameter + 1mm clearance -> routed around 6 pixel(s) the path would otherwise have crossed`.
 
 The `-ExecutionPolicy Bypass` is only needed if Windows blocks running
 unsigned local scripts by default on your machine; it doesn't change any

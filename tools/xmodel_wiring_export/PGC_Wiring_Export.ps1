@@ -8,7 +8,9 @@
 
     - One polyline per physical LED string, in true wiring order (layers STRING_1,
       STRING_2, ...). This is the path a marker mounted on the spindle can trace to
-      draw the wiring guide directly onto the prop.
+      draw the wiring guide directly onto the prop. Where a straight line between two
+      consecutive nodes would pass through an unrelated pixel's hole (ambiguous - looks
+      like the wire terminates there), the path is automatically kinked around it.
 
     - One small circle per node, at its exact real-world position (layer NODE_POINTS).
       Select these in VCarve along with your circle+notch template (last) and run
@@ -30,11 +32,22 @@
   Radius, in mm, of the reference circles on the NODE_POINTS layer. Default 1.5mm.
   Purely cosmetic - PGC_Replace_Circles only uses each circle's center, not its size.
 
+.PARAMETER HoleDiameter
+  Diameter, in mm, of the actual drilled pixel hole - used as the keep-out zone a
+  wiring-path segment is routed around when it would otherwise cut across an
+  unrelated pixel's hole (ambiguous - looks like the wire terminates there). If not
+  given, the script tries to read it from the model's PixelType attribute (e.g.
+  "12mm bullet or square" -> 12mm); falls back to 12mm if that can't be parsed.
+
+.PARAMETER ClearanceMargin
+  Extra clearance, in mm, added outside the hole radius when routing around an
+  obstacle, so the path doesn't just graze the edge of the hole. Default 1.0mm.
+
 .EXAMPLE
   .\PGC_Wiring_Export.ps1 "C:\Users\ogbul\Desktop\Web L.xmodel"
 
 .EXAMPLE
-  .\PGC_Wiring_Export.ps1 -InputPath "Web L.xmodel" -OutputPath "Z:\Halloween\Web_L.dxf" -PointRadius 2.0
+  .\PGC_Wiring_Export.ps1 -InputPath "Web L.xmodel" -OutputPath "Z:\Halloween\Web_L.dxf" -PointRadius 2.0 -HoleDiameter 10
 
 .NOTES
   First run may need:  powershell -ExecutionPolicy Bypass -File .\PGC_Wiring_Export.ps1 "file.xmodel"
@@ -48,7 +61,11 @@ param(
     [Parameter(Position = 1)]
     [string]$OutputPath,
 
-    [double]$PointRadius = 1.5
+    [double]$PointRadius = 1.5,
+
+    [Nullable[double]]$HoleDiameter = $null,
+
+    [double]$ClearanceMargin = 1.0
 )
 
 $ErrorActionPreference = "Stop"
@@ -144,6 +161,113 @@ if ($byNode.Count -ne $pixelCount) {
 }
 
 # ---------------------------------------------------------------------------
+# Work out the hole keep-out radius, for routing wiring-path segments around
+# pixels they don't actually connect to.
+# ---------------------------------------------------------------------------
+
+if ($null -eq $HoleDiameter) {
+    $pixelType = $model.PixelType
+    $match = [regex]::Match($pixelType, '(\d+(\.\d+)?)\s*mm')
+    if ($match.Success) {
+        $HoleDiameter = [double]$match.Groups[1].Value
+    } else {
+        $HoleDiameter = 12.0
+        Write-Warning "Could not determine hole diameter from PixelType ('$pixelType') - defaulting to 12mm. Pass -HoleDiameter to override."
+    }
+}
+$keepoutRadius = ($HoleDiameter / 2.0) + $ClearanceMargin
+
+# ---------------------------------------------------------------------------
+# Route a single A->B segment around any OTHER node's hole that it would
+# otherwise pass through, so the path never ambiguously cuts across a pixel
+# it doesn't actually connect to. Returns an ordered list of waypoints
+# starting at A and ending at B (straight through, if nothing is in the way).
+# ---------------------------------------------------------------------------
+
+function Get-PointSegmentInfo([double]$px, [double]$py, [double]$ax, [double]$ay, [double]$bx, [double]$by) {
+    $dx = $bx - $ax
+    $dy = $by - $ay
+    $lenSq = ($dx * $dx) + ($dy * $dy)
+    if ($lenSq -eq 0) {
+        $ddx = $px - $ax; $ddy = $py - $ay
+        return [PSCustomObject]@{ Distance = [math]::Sqrt(($ddx*$ddx)+($ddy*$ddy)); T = 0.0 }
+    }
+    $t = ((($px - $ax) * $dx) + (($py - $ay) * $dy)) / $lenSq
+    $tClamped = [math]::Max(0.0, [math]::Min(1.0, $t))
+    $projX = $ax + ($tClamped * $dx)
+    $projY = $ay + ($tClamped * $dy)
+    $ddx = $px - $projX; $ddy = $py - $projY
+    return [PSCustomObject]@{ Distance = [math]::Sqrt(($ddx*$ddx)+($ddy*$ddy)); T = $t }
+}
+
+function Get-RoutedSegment($nodeA, $nodeB, [hashtable]$allNodes, [double]$keepout) {
+
+    $ax = $allNodes[$nodeA].X; $ay = $allNodes[$nodeA].Y
+    $bx = $allNodes[$nodeB].X; $by = $allNodes[$nodeB].Y
+
+    $obstacles = New-Object System.Collections.Generic.List[object]
+    foreach ($n in $allNodes.Keys) {
+        if ($n -eq $nodeA -or $n -eq $nodeB) { continue }
+        $p = $allNodes[$n]
+        $info = Get-PointSegmentInfo $p.X $p.Y $ax $ay $bx $by
+        if ($info.Distance -lt $keepout -and $info.T -gt 0.02 -and $info.T -lt 0.98) {
+            [void]$obstacles.Add([PSCustomObject]@{ Node = $n; T = $info.T; X = $p.X; Y = $p.Y })
+        }
+    }
+
+    $path = New-Object System.Collections.Generic.List[object]
+    [void]$path.Add([PSCustomObject]@{ X = $ax; Y = $ay })
+
+    if ($obstacles.Count -eq 0) {
+        [void]$path.Add([PSCustomObject]@{ X = $bx; Y = $by })
+        return $path
+    }
+
+    $dx = $bx - $ax
+    $dy = $by - $ay
+    $len = [math]::Sqrt(($dx*$dx) + ($dy*$dy))
+    $perpX = 0.0; $perpY = 0.0
+    if ($len -gt 0) {
+        $perpX = -$dy / $len
+        $perpY = $dx / $len
+    }
+
+    foreach ($obs in ($obstacles | Sort-Object T)) {
+
+        # Try routing the detour to either side of the original line and
+        # keep whichever candidate ends up farther from every other node,
+        # so nudging around one hole doesn't just clip a different one.
+        $bestPoint = $null
+        $bestMinDist = -1.0
+
+        foreach ($side in @(1, -1)) {
+            $offset = ($keepout * 1.25) * $side
+            $wx = $obs.X + ($perpX * $offset)
+            $wy = $obs.Y + ($perpY * $offset)
+
+            $minDist = [double]::MaxValue
+            foreach ($n2 in $allNodes.Keys) {
+                if ($n2 -eq $obs.Node) { continue }
+                $p2 = $allNodes[$n2]
+                $ddx = $wx - $p2.X; $ddy = $wy - $p2.Y
+                $d = [math]::Sqrt(($ddx*$ddx) + ($ddy*$ddy))
+                if ($d -lt $minDist) { $minDist = $d }
+            }
+
+            if ($minDist -gt $bestMinDist) {
+                $bestMinDist = $minDist
+                $bestPoint = [PSCustomObject]@{ X = $wx; Y = $wy }
+            }
+        }
+
+        [void]$path.Add($bestPoint)
+    }
+
+    [void]$path.Add([PSCustomObject]@{ X = $bx; Y = $by })
+    return $path
+}
+
+# ---------------------------------------------------------------------------
 # Build the DXF (classic R12-style POLYLINE/VERTEX/SEQEND + CIRCLE, so it
 # opens in the widest range of CAD software including VCarve).
 # ---------------------------------------------------------------------------
@@ -219,14 +343,35 @@ function Add-Circle([string]$layer, [double]$cx, [double]$cy, [double]$r) {
     Add-Pair "40" $r.ToString("F4")
 }
 
+$totalDetours = 0
+
 for ($i = 0; $i -lt $numStrings; $i++) {
     $layerName = "STRING_$($i + 1)"
-    $points = New-Object System.Collections.Generic.List[object]
+
+    $stringNodes = New-Object System.Collections.Generic.List[int]
     for ($n = $sortedStarts[$i]; $n -le $stringEnds[$i]; $n++) {
         if ($byNode.ContainsKey($n)) {
-            [void]$points.Add($byNode[$n])
+            [void]$stringNodes.Add($n)
         }
     }
+
+    $points = New-Object System.Collections.Generic.List[object]
+    for ($j = 0; $j -lt $stringNodes.Count - 1; $j++) {
+        $segment = Get-RoutedSegment $stringNodes[$j] $stringNodes[$j + 1] $byNode $keepoutRadius
+        if ($segment.Count -gt 2) {
+            $totalDetours += ($segment.Count - 2)
+        }
+        if ($j -eq 0) {
+            foreach ($p in $segment) { [void]$points.Add($p) }
+        } else {
+            # skip the first point - it's the same as the previous segment's last point
+            for ($k = 1; $k -lt $segment.Count; $k++) { [void]$points.Add($segment[$k]) }
+        }
+    }
+    if ($stringNodes.Count -eq 1) {
+        [void]$points.Add($byNode[$stringNodes[0]])
+    }
+
     Add-Polyline -layer $layerName -points $points
 }
 
@@ -245,6 +390,7 @@ Write-Host "Wrote $($byNode.Count) node circles (NODE_POINTS) and $numStrings wi
 Write-Host "  $OutputPath"
 Write-Host "Grid cell size: $([math]::Round($cellW,3))mm x $([math]::Round($cellH,3))mm"
 Write-Host "Bounding box: 0,0 to ${widthMm}mm, ${heightMm}mm"
+Write-Host "Hole keep-out: $($HoleDiameter)mm diameter + $($ClearanceMargin)mm clearance -> routed around $totalDetours pixel(s) the path would otherwise have crossed"
 Write-Host ""
 $layerList = (1..$numStrings | ForEach-Object { "STRING_$_" }) -join ", "
 Write-Host "Import into VCarve as Millimeters. Layers: $layerList, NODE_POINTS"
