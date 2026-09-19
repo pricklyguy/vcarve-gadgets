@@ -1,8 +1,9 @@
 -- VECTRIC LUA SCRIPT
 -- Name = Undo Last PGC Change
--- Version = 1.1
+-- Version = 1.2
 -- Help = Reverses the most recent change made by a PGC_* gadget
---        (PGC_Rotate, PGC_Nudge_To_Guide, PGC_Replace_Circles).
+--        (PGC_Rotate, PGC_Nudge_To_Guide, PGC_Replace_Circles,
+--        PGC_Marker_Offset).
 --        VCarve's own Ctrl+Z does not see changes gadgets make -
 --        run this instead. Can be run repeatedly to step back
 --        through the last several PGC changes.
@@ -340,6 +341,50 @@ function main(script_path)
                     local undo_matrix = TranslationMatrix2D(move_vector)
                     object:Transform(undo_matrix)
                     translated_count = translated_count + 1
+                end
+
+            elseif op.op == "delete_copy" then
+
+                -- A copy made by PGC_Marker_Offset: it lives on the
+                -- "PGC Marker Path" layer, so only search that layer,
+                -- matching by bounding-box center.
+                local cx = tonumber(op.cx)
+                local cy = tonumber(op.cy)
+
+                local copy_layer = job.LayerManager:GetLayerWithName("PGC Marker Path")
+                local found = nil
+
+                local copy_pos = copy_layer:GetHeadPosition()
+
+                while copy_pos ~= nil do
+
+                    local candidate
+                    candidate, copy_pos = copy_layer:GetNext(copy_pos)
+
+                    if candidate ~= nil then
+
+                        local bbox = candidate:GetBoundingBox()
+
+                        if bbox ~= nil then
+
+                            local center = bbox.Center
+
+                            if PGC_PointsMatch(center.X, center.Y, cx, cy, tolerance) then
+                                found = candidate
+                                break
+                            end
+
+                        end
+
+                    end
+
+                end
+
+                if found == nil then
+                    missing_count = missing_count + 1
+                else
+                    copy_layer:RemoveObject(found)
+                    removed_count = removed_count + 1
                 end
 
             elseif op.op == "replace" then
