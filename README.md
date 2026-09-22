@@ -46,7 +46,7 @@ hand; they aren't removed automatically.
 
 | Tool | What it does |
 |---|---|
-| [`tools/xmodel_wiring_export`](tools/xmodel_wiring_export/) | `PGC_Wiring_Export.ps1` — standalone PowerShell script (runs outside VCarve). Converts an xLights `.xmodel` export into a DXF: one polyline per LED string in true wiring order (for a spindle-mounted marker to trace), plus one reference circle per node at its exact position (feed these into `PGC_Replace_Circles` for accurate hole placement). See its own README for usage. |
+| [`tools/xmodel_wiring_export`](tools/xmodel_wiring_export/) | `PGC_Wiring_Export.ps1` — standalone PowerShell script (runs outside VCarve). Converts an xLights `.xmodel` export into a DXF: one polyline per LED string in true wiring order (for a spindle-mounted marker to trace, auto-routed around pixels it doesn't connect to, and pre-rotated/flipped to land correctly in VCarve), plus one reference circle per node at its exact position (feed these into `PGC_Replace_Circles` for accurate hole placement). `PGC_Wiring_Export_GUI.ps1` + `Install-Desktop-Shortcut.ps1` give it a desktop app instead of a command line. See its own README for usage and options. |
 
 ## Installing a gadget
 

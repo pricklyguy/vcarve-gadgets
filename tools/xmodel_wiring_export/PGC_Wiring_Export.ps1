@@ -44,6 +44,13 @@
   Extra clearance, in mm, added outside the hole radius when routing around an
   obstacle, so the path doesn't just graze the edge of the hole. Default 1.0mm.
 
+.PARAMETER OrientToVCarve
+  Every model exported so far has come into VCarve needing a manual 270-degree
+  rotate + horizontal flip to line up with the actual drawing. On by default,
+  this bakes that same transform into the output so it should no longer be
+  needed. Pass -OrientToVCarve false to get the raw, un-rotated xLights
+  layout instead (e.g. to compare, or if a model turns out not to need it).
+
 .EXAMPLE
   .\PGC_Wiring_Export.ps1 "C:\Users\ogbul\Desktop\Web L.xmodel"
 
@@ -66,10 +73,18 @@ param(
 
     [Nullable[double]]$HoleDiameter = $null,
 
-    [double]$ClearanceMargin = 1.0
+    [double]$ClearanceMargin = 1.0,
+
+    # A [bool] parameter can't be bound from a plain string, which is all a
+    # script invoked with -File ever receives on the command line (even
+    # "$true"/"1" text fails) - so this takes "true"/"false" as text and is
+    # parsed by hand just below instead.
+    [string]$OrientToVCarve = "true"
 )
 
 $ErrorActionPreference = "Stop"
+
+$doOrient = @("true", "1", "yes", "on") -contains $OrientToVCarve.Trim().ToLower()
 
 if (-not (Test-Path -LiteralPath $InputPath)) {
     Write-Error "Input file not found: $InputPath"
@@ -154,11 +169,35 @@ foreach ($triple in $compressed.Split(';')) {
     $node = [int]$parts[0]
     $col  = [double]$parts[1]
     $row  = [double]$parts[2]
-    $byNode[$node] = [PSCustomObject]@{ X = $col * $cellW; Y = $row * $cellH }
+    $x = $col * $cellW
+    $y = $row * $cellH
+
+    if ($doOrient) {
+        # Every model exported so far has needed a manual 270-degree
+        # rotate + horizontal flip in VCarve to line up. Bake that same
+        # transform in here: rotate 270 CCW (x,y)->(y,-x), then flip
+        # horizontal (negate X) -> (-y,-x), then shift back into
+        # positive coordinates (rotating swaps the width/height extent).
+        $x2 = -$y
+        $y2 = -$x
+        $x = $x2 + $heightMm
+        $y = $y2 + $widthMm
+    }
+
+    $byNode[$node] = [PSCustomObject]@{ X = $x; Y = $y }
 }
 
 if ($byNode.Count -ne $pixelCount) {
     Write-Warning "Expected $pixelCount nodes but parsed $($byNode.Count). Continuing anyway."
+}
+
+# After a 90-degree-equivalent rotation the output's overall bounding box
+# has its width/height swapped from the source model's own widthmm/heightmm.
+$outputWidthMm  = $widthMm
+$outputHeightMm = $heightMm
+if ($doOrient) {
+    $outputWidthMm  = $heightMm
+    $outputHeightMm = $widthMm
 }
 
 # ---------------------------------------------------------------------------
@@ -390,8 +429,11 @@ Write-Host "Model: $($model.name)"
 Write-Host "Wrote $($byNode.Count) node circles (NODE_POINTS) and $numStrings wiring polyline(s) to:"
 Write-Host "  $OutputPath"
 Write-Host "Grid cell size: $([math]::Round($cellW,3))mm x $([math]::Round($cellH,3))mm"
-Write-Host "Bounding box: 0,0 to ${widthMm}mm, ${heightMm}mm"
+Write-Host "Bounding box: 0,0 to ${outputWidthMm}mm, ${outputHeightMm}mm"
 Write-Host "Hole keep-out: $($HoleDiameter)mm diameter + $($ClearanceMargin)mm clearance -> routed around $totalDetours pixel(s) the path would otherwise have crossed"
+if ($doOrient) {
+    Write-Host "Orientation: rotated 270 + flipped horizontal to match VCarve (pass -OrientToVCarve false for the raw xLights layout)"
+}
 Write-Host ""
 $layerList = (1..$numStrings | ForEach-Object { "STRING_$_" }) -join ", "
 Write-Host "Import into VCarve as Millimeters. Layers: $layerList, NODE_POINTS"
