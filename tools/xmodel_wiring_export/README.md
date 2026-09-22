@@ -53,6 +53,13 @@ right-click > Run with PowerShell) to create a **"PGC Wiring Export"**
 shortcut on your Desktop. After that, just double-click the shortcut -
 no console window, just the app.
 
+The Hole diameter, Clearance margin, and Point radius boxes are blank by
+default on purpose - leave any of them blank to use `PGC_Wiring_Export.ps1`'s
+own current default for it. (An earlier version of this GUI hardcoded
+`1.0`/`1.5` into two of those boxes, which silently overrode any default
+change made in the core script - fixed, but worth knowing why leaving them
+blank is the right move if you've tuned the core script's own defaults.)
+
 Known cosmetic issue: the first "Browse..." button sometimes renders in
 the wrong spot on open (confirmed NOT a display-scaling issue - reproduces
 at 100% scale). Everything still works correctly (file picking, all

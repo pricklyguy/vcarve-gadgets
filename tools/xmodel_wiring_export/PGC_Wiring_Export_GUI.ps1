@@ -118,20 +118,24 @@ $holeBox.Location = New-Object System.Drawing.Point(15, $y)
 $holeBox.Size = New-Object System.Drawing.Size(170, 24)
 $form.Controls.Add($holeBox)
 
+# Left blank rather than hardcoding a value here: whatever value is typed
+# gets sent as an explicit override that always wins, silently shadowing
+# the real default that lives in PGC_Wiring_Export.ps1's own param block.
+# Leaving these blank means "use the core script's own current default"
+# actually means that, instead of secretly pinning it to whatever number
+# was hardcoded here on the day this GUI was written.
 $marginBox = New-Object System.Windows.Forms.TextBox
-$marginBox.Text = "1.0"
 $marginBox.Location = New-Object System.Drawing.Point(210, $y)
 $marginBox.Size = New-Object System.Drawing.Size(170, 24)
 $form.Controls.Add($marginBox)
 
 $radiusBox = New-Object System.Windows.Forms.TextBox
-$radiusBox.Text = "1.5"
 $radiusBox.Location = New-Object System.Drawing.Point(405, $y)
 $radiusBox.Size = New-Object System.Drawing.Size(160, 24)
 $form.Controls.Add($radiusBox)
 $y += 28
 
-$form.Controls.Add((New-Label "Hole diameter blank = auto-detect from the model, 15mm fallback." 15 $y 560))
+$form.Controls.Add((New-Label "Leave any of the three blank to use PGC_Wiring_Export.ps1's own current default for it." 15 $y 560))
 $y += 24
 
 $orientCheck = New-Object System.Windows.Forms.CheckBox
