@@ -37,12 +37,12 @@
   wiring-path segment is routed around when it would otherwise cut across an
   unrelated pixel's hole (ambiguous - looks like the wire terminates there). If not
   given, the script tries to read it from the model's PixelType attribute (e.g.
-  "12mm bullet or square" -> 12mm); falls back to 15mm if that can't be parsed
+  "12mm bullet or square" -> 12mm); falls back to 12mm if that can't be parsed
   (e.g. PixelType is just "Bullets" with no size in the text).
 
 .PARAMETER ClearanceMargin
   Extra clearance, in mm, added outside the hole radius when routing around an
-  obstacle, so the path doesn't just graze the edge of the hole. Default 1.0mm.
+  obstacle, so the path doesn't just graze the edge of the hole. Default 5.0mm.
 
 .PARAMETER OrientToVCarve
   Every model exported so far has come into VCarve needing a manual 270-degree
@@ -73,7 +73,7 @@ param(
 
     [Nullable[double]]$HoleDiameter = $null,
 
-    [double]$ClearanceMargin = 1.0,
+    [double]$ClearanceMargin = 5.0,
 
     # A [bool] parameter can't be bound from a plain string, which is all a
     # script invoked with -File ever receives on the command line (even
@@ -211,8 +211,8 @@ if ($null -eq $HoleDiameter) {
     if ($match.Success) {
         $HoleDiameter = [double]$match.Groups[1].Value
     } else {
-        $HoleDiameter = 15.0
-        Write-Warning "Could not determine hole diameter from PixelType ('$pixelType') - defaulting to 15mm. Pass -HoleDiameter to override."
+        $HoleDiameter = 12.0
+        Write-Warning "Could not determine hole diameter from PixelType ('$pixelType') - defaulting to 12mm. Pass -HoleDiameter to override."
     }
 }
 $keepoutRadius = ($HoleDiameter / 2.0) + $ClearanceMargin
